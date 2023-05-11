@@ -1,5 +1,12 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from typing import List, TypedDict, Union
+
+
+# define a typed dict for mapping client id to data index
+class ClientDataIdxMap(TypedDict):
+    client_id: Union[int, str]
+    data_idx: List[int]
 
 class BaseSplitter(ABC):
     def __init__(self, num_clients):
@@ -76,7 +83,7 @@ class LDASplitter(BaseSplitter):
         print({id: len(idxs) for id, idxs in self.clients_dataidx_map.items()})
         return self
     
-    def get_clients_dataidx_map(self):
+    def get_clients_dataidx_map(self) -> ClientDataIdxMap:
         return self.clients_dataidx_map
     
     def __repr__(self):
@@ -100,7 +107,7 @@ class IIDSplitter(BaseSplitter):
         print({id: len(idxs) for id, idxs in self.clients_dataidx_map.items()})
         return self
     
-    def get_clients_dataidx_map(self):
+    def get_clients_dataidx_map(self)-> ClientDataIdxMap:
         return self.clients_dataidx_map
         
     
