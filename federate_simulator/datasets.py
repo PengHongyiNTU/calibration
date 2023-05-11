@@ -62,6 +62,13 @@ def load_centralized_dataset(dataset: str, data_cfg: Box) -> Tuple[Dataset, Data
         data_class = torchvision.datasets.CIFAR100
         transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
                                         transforms.ToTensor(), transforms.Normalize((0.5071, 0.4867, 0.4408),
+    
+    # To be include in the future
+    # TINY IMAGENET
+    # FEMNIST
+    # SVHN
+    # SHAKESPEARE
+
                                                                                     (0.2675, 0.2565, 0.2761))])
     trainset = data_class(root='./data', train=True,
                           download=True, transform=transform)
