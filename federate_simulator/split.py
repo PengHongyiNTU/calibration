@@ -1,24 +1,26 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import List, TypedDict, Union
+from typing import TypedDict, Union, List
+from torch.utils.data import random_split
+# A seperate data class that aims to store the data index of each client
+# It can be accessed as a python Box object
+# For example: ClientDataIdxMap.client_id = [0, 1, 2, 3, 4, 5, 6]
 
 
-# define a typed dict for mapping client id to data index
-class ClientDataIdxMap(TypedDict):
-    client_id: Union[int, str]
-    data_idx: List[int]
+class DataMap(TypedDict):
+    global_idx: Union[List[int], None]
+    clients_idx: dict[int, List[int]]
+
 
 class BaseSplitter(ABC):
-    def __init__(self, num_clients):
+    def __init__(self, num_clients, dataset):
         self.num_clients = num_clients
+        self.dataset = dataset
         pass
+
     @abstractmethod
-    def __call__(self, dataset):
+    def split(self, dataset):
         pass
-    @abstractmethod
-    def get_clients_dataidx_map(self):
-        pass
-    
 
 
 def dirichlet_distribution_non_iid_slice(label, num_clients, alpha, min_size=10):
@@ -35,7 +37,8 @@ def dirichlet_distribution_non_iid_slice(label, num_clients, alpha, min_size=10)
         raise ValueError("label must be a 1-D array")
     num_samples = len(label)
     num_classes = len(np.unique(label))
-    assert num_samples >= num_clients * min_size, f"num_samples must be larger than {num_clients * min_size}"
+    assert num_samples >= num_clients * \
+        min_size, f"num_samples must be larger than {num_clients * min_size}"
     size = 0
     while size < min_size:
         idx_slice = [[] for _ in range(num_clients)]
@@ -62,60 +65,90 @@ def dirichlet_distribution_non_iid_slice(label, num_clients, alpha, min_size=10)
 
 
 class LDASplitter(BaseSplitter):
-    def __init__(self, num_clients, alpha=0.5, min_size=10):
+    def __init__(self, num_clients,
+                 alpha=0.5, min_size=10):
         self.num_clients = num_clients
         self.alpha = alpha
         self.min_size = min_size
-        self.clients_dataidx_map = dict.fromkeys(
-            list(range(num_clients))
-        )
-    
-    def __call__(self, dataset):
+        # if training, no global data map
+
+    def split(self, dataset, train=True, local=True, global_local_ratio=0.5):
+        data_map: DataMap = {
+            'global_idx': None,
+            'clients_idx': dict.fromkeys(range(self.num_clients), None)
+        }
+        if train:
+            assert data_map['global_idx'] is None, "global_idx must be None when training"
+            data_map['clients_idx'] = self.__split(dataset)
+        else:
+            if local:
+                assert global_local_ratio <= 1, "global_local_ratio must be less than 1"
+                local_size = int(global_local_ratio * len(dataset))
+                local_set, global_set = random_split(
+                    dataset, [local_size, len(dataset) - local_size])
+                data_map['global_idx'] = global_set.indices
+                data_map['clients_idx'] = self.__split(local_set)
+            else:
+                assert data_map['clients_idx'] is None, "clients_idx must be None when not local"
+                data_map['global_idx'] = np.arange(len(dataset))
+        return data_map
+        
+        
+    def __split(self, dataset):
         label = np.array([y for x, y in dataset])
-        idx_slice = dirichlet_distribution_non_iid_slice(label, 
-                                                         self.num_clients,
-                                                         self.alpha,
-                                                         self.min_size
-                                                         )
+        idx_slice = dirichlet_distribution_non_iid_slice(label,
+                                                        self.num_clients,
+                                                        self.alpha,
+                                                        self.min_size
+                                                        )
+        clients_idx = dict.fromkeys(range(self.num_clients), None)
         for i, idx in enumerate(idx_slice):
-            self.clients_dataidx_map[i] = idx
+            clients_idx[i] = idx
         print('Splitting dataset into {} clients.'.format(self.num_clients))
-        print({id: len(idxs) for id, idxs in self.clients_dataidx_map.items()})
-        return self
-    
-    def get_clients_dataidx_map(self) -> ClientDataIdxMap:
-        return self.clients_dataidx_map
-    
+        print({id: len(idxs) for id, idxs in clients_idx.items()})
+        return clients_idx
+
+
     def __repr__(self):
         return f'{self.__class__.__name__}(num_clients={self.num_clients}, alpha={self.alpha})'
-    
-
 
 class IIDSplitter(BaseSplitter):
     def __init__(self, num_clients):
         self.num_clients = num_clients
-        self.clients_dataidx_map = dict.fromkeys(
-            list(range(num_clients))
-        )
-        
-    def __call__(self, dataset):
+    
+    def split(self, dataset, train=True, local=True, global_local_ratio=0.5):
+        data_map: DataMap = {
+            'global_idx': None,
+            'clients_idx': dict.fromkeys(range(self.num_clients), None)
+        }
+        if train:
+            assert data_map['global_idx'] is None, "global_idx must be None when training"
+            data_map['clients_idx'] = self.__split(dataset)
+        else:
+            if local:
+                assert global_local_ratio <= 1, "global_local_ratio must be less than 1"
+                local_size = int(global_local_ratio * len(dataset))
+                local_set, global_set = random_split(
+                    dataset, [local_size, len(dataset) - local_size])
+                data_map['global_idx'] = global_set.indices
+                data_map['clients_idx'] = self.__split(local_set)
+            else:
+                assert data_map['clients_idx'] is None, "clients_idx must be None when not local"
+                data_map['global_idx'] = np.arange(len(dataset))
+        return data_map
+    
+    def __split(self, dataset):
         idxs = np.arange(len(dataset))
         idxs_slice = np.array_split(idxs, self.num_clients)
+        clients_idx = dict.fromkeys(range(self.num_clients), None)
         for i, idx in enumerate(idxs_slice):
-            self.clients_dataidx_map[i] = idx
+            clients_idx[i] = idx
         print('Splitting dataset into {} clients.'.format(self.num_clients))
-        print({id: len(idxs) for id, idxs in self.clients_dataidx_map.items()})
-        return self
-    
-    def get_clients_dataidx_map(self)-> ClientDataIdxMap:
-        return self.clients_dataidx_map
-        
-    
+        print({id: len(idxs) for id, idxs in clients_idx.items()})
+        return clients_idx
+
     def __repr__(self):
         return f'{self.__class__.__name__}(num_clients={self.num_clients})'
-    
-
 
 if __name__ == "__main__":
     pass
-   
