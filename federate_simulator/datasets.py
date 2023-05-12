@@ -10,14 +10,11 @@ from split import LDASplitter, IIDSplitter
 def load_dataset(dataset: str, data_cfg: Box):
     if dataset in ['mnist', 'cifar10', 'cifar100']:
         trainset, testset, valset = load_centralized_dataset(dataset, data_cfg)
-        train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(
-            trainset, testset, valset, data_cfg)
     elif dataset in ['some_real_fl_dataset']:
-        train_idx_mapping, test_idx_mapping, val_idx_mapping = load_federated_dataset(
-            dataset, data_cfg)
+        trainset, testset, valset = load_federated_dataset(dataset, data_cfg)
     else:
         raise ValueError(f'Unknown dataset {dataset}')
-    return train_idx_mapping, test_idx_mapping, val_idx_mapping
+    return trainset, testset, valset
 
 
 def split_dataset(trainset: Dataset,
@@ -45,6 +42,8 @@ def split_dataset(trainset: Dataset,
             val_mapping = splitter.split(valset, train=False,
                                             local=data_cfg.require_local_val,
                                             global_local_ratio=data_cfg.global_local_ratio)
+        else:
+            val_mapping = None
     return train_mapping, test_mapping, val_mapping
 
 
@@ -100,13 +99,16 @@ if __name__ == "__main__":
         'require_local_test': True,
         'require_local_val': True,
         'global_local_ratio': 0.5,
-        'val': True,
+        'val': False,
         'val_portion': 0.1,
         'alpha': 0.5
     }, dafault_box=True)
 
-    train_idx_mapping, test_idx_mapping, val_idx_mapping = load_dataset(
+    train_set, test_set, val_set = load_dataset(
         'mnist', data_cfg)
+    train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(
+        trainset=train_set, testset=test_set, valset=val_set, data_cfg=data_cfg
+    )
 
     # print(train_idx_mapping)
     print("Train index mapping:")
@@ -118,7 +120,8 @@ if __name__ == "__main__":
     for client_id, idxs in test_idx_mapping['clients_idx'].items():
         print(f"Client {client_id}: {len(idxs)} samples")
 
-    print("\nValidation index mapping:")
-    print(f'Global : {len(val_idx_mapping["global_idx"])}')
-    for client_id, idxs in val_idx_mapping['clients_idx'].items():
-        print(f"Client {client_id}: {len(idxs)} samples")
+    if val_idx_mapping is not None:
+        print("\nValidation index mapping:")
+        print(f'Global : {len(val_idx_mapping["global_idx"])}')
+        for client_id, idxs in val_idx_mapping['clients_idx'].items():
+            print(f"Client {client_id}: {len(idxs)} samples")
