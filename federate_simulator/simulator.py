@@ -75,7 +75,6 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
                 if local_train_loader:
                     self.notify_observers(
                         ['FederatedAggregator', 
-                         'Evaluator',
                          'Logger'],
                         'on_local_round_start',
                         local_train_loader,
@@ -86,25 +85,27 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
                 local_test_loader = self.results['local_round_end']['FederatedDatasetLoader']['local_test_loader']
                 local_val_loader = self.results['local_round_end']['FederatedDatasetLoader']['local_val_loader']
                 if local_test_loader or local_val_loader:
-                    self.notify_observer('Evaluator', 
+                    self.notify_observer(['FederatedAggregator',
+                                          'Evaluator', 
+                                          'Logger'], 
                                          f'on_{stage}', 
                                          local_test_loader, 
                                          local_val_loader, 
                                          client_id)
-                stage = 'global_round_end'
-                self.notify_observer(
-                    'FederatedDataLoader',
-                    f'on_{stage}',
-                )
-                global_train_loader = self.results['global_round_end']['FederatedDatasetLoader']['global_train_loader']
-                global_test_loader = self.results['global_round_end']['FederatedDatasetLoader']['global_test_loader']
-                self.notify_observers(
-                    ['FederatedAggregator', 'Evaluator', 'Logger'],
-                    f'on_{stage}',
-                    global_train_loader,
-                    global_test_loader,
-                    self.results
-                )
+            stage = 'global_round_end'
+            self.notify_observer(
+                'FederatedDataLoader',
+                f'on_{stage}',
+            )
+            global_train_loader = self.results['global_round_end']['FederatedDatasetLoader']['global_train_loader']
+            global_test_loader = self.results['global_round_end']['FederatedDatasetLoader']['global_test_loader']
+            self.notify_observers(
+                ['FederatedAggregator', 'Evaluator', 'Logger'],
+                f'on_{stage}',
+                global_train_loader,
+                global_test_loader,
+                self.results
+            )
                 
                 
             
