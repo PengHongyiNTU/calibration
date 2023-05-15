@@ -1,62 +1,112 @@
 from box import Box
+from abc import ABC, abstractmethod
 
-class BaseFederatedLearningSimulator:
-    def __init__(self, config: Box):
+
+class BaseFederatedLearningSimulator(ABC):
+    def __init__(self, config: Box, observers):
         self.config = config
-        self.observers = []
-    
-    def add_observer(self, observer):
-        self.observers.append(observer)
-        
-    def notify_observers(self, method_name, *args, **kwargs):
-        for observer in self.observers:
-            if hasattr(observer, method_name):
-                method = getattr(observer, method_name)
-                method(*args, **kwargs)
-    
-    
-class FederatedLearningSimulator:
-    def __init__(self, config):
-        self.observers = []
-        self.config = config
+        self.observers = {}
+        self.stages = ['initilization',
+                        'local_round_start',
+                       'local_round_end',
+                       'global_round_start',
+                       'global_round_end']
+        self.results = dict.fromkeys(self.stages, {})
+        self.register_observers(observers)
 
-    def register_observer(self, observer):
-        self.observers.append(observer)
+    
+    
+    def register_observer(self, observers):
+        for observer in observers:
+            base_class_name = observer.__class__.__bases__[0].__name__
+            self.observers[base_class_name] = observer
 
-    def notify_observers(self, method_name, **kwargs):
+
+    
+    def notify_all(self, stage, *args, **kwargs):
         results = {}
-        for observer in self.observers:
-            method = getattr(observer, method_name, None)
-            if method:
-                results[observer.__class__.__name__] = method(**kwargs)
-        return results
+        for observer_name, observer_instance in self.observers.items():
+            if hasattr(observer_instance, stage):
+                method = getattr(observer_instance, stage)
+                result = method(*args, **kwargs)
+                results[observer_name] = result
+        self.results[stage] = results
+        
+    def notify_observer(self, observer_name, stage, *args, **kwargs):
+        if observer_name not in self.observers:
+            raise ValueError(f'{observer_name} is not registered in the simulator')
+        else: 
+            observer = self.observers[observer_name]
+            if hasattr(observer, stage):
+                method = getattr(observer, stage)
+                result = method(*args, **kwargs)
+                self.results[stage][observer.__class__.__name__] = result
+            
+            
+    def notify_observers(self, observer_names, stage, *args, **kwargs):
+        for observer_name in observer_names:
+            self.notify_observer(observer_name, stage, *args, **kwargs)
+
+        
+
+    # Need to implement the main runing loop of the simulator here
+    @abstractmethod
+    def run(self):
+        pass
+
+
+class FederatedLearningSimulator(BaseFederatedLearningSimulator):
+    def __init__(self, config: Box, Observers):
+        super().__init__(config, Observers)
 
     def run(self):
-        for global_round in range(self.config.global_rounds):
-            self.notify_observers('on_global_round_start')
-
-            local_models = []
-            for client_id in range(self.config.num_clients):
-                self.notify_observers('on_local_round_start', client_id=client_id)
-
-                # Get the local train loader from the FederatedDatasetLoader observer
-                loader_results = self.notify_observers('on_local_round_start', client_id=client_id)
-                local_train_loader = loader_results.get('FederatedDatasetLoader')
-
-                # Train the local model using the FedAvgAlgorithm observer
-                algorithm_results = self.notify_observers('on_local_round_start', client_id=client_id)
-                local_model = algorithm_results.get('FedAvgAlgorithm')
+        # Initialize all observers
+        stage = 'initilization'
+        self.notify_all(f'on_{stage}', self.config)
+        for global_round in self.config.global_rounds:
+            stage = 'global_round_start'
+            self.notify_observer('ClientSelector', f'on_{stage}', global_round)
+            selected_clients = self.results['global_round_start']['ClientSelector']['selected_clients']
+            for client_id in selected_clients:
+                stage = 'local_round_start'
+                self.notify_observers(['FederatedDataLoader'], 
+                                      f'on_{stage}', client_id)
+                local_train_loader = self.results['local_round_start']['FederatedDatasetLoader']['local_train_loader']
+                if local_train_loader:
+                    self.notify_observers(
+                        ['FederatedAggregator', 
+                         'Evaluator',
+                         'Logger'],
+                        'on_local_round_start',
+                        local_train_loader,
+                        client_id
+                    )
+                stage = 'local_round_end'
+                self.notify_observer('FederatedDataLoader', f'on_{stage}', client_id)
+                local_test_loader = self.results['local_round_end']['FederatedDatasetLoader']['local_test_loader']
+                local_val_loader = self.results['local_round_end']['FederatedDatasetLoader']['local_val_loader']
+                if local_test_loader or local_val_loader:
+                    self.notify_observer('Evaluator', 
+                                         f'on_{stage}', 
+                                         local_test_loader, 
+                                         local_val_loader, 
+                                         client_id)
+                stage = 'global_round_end'
+                self.notify_observer(
+                    'FederatedDataLoader',
+                    f'on_{stage}',
+                )
+                global_train_loader = self.results['global_round_end']['FederatedDatasetLoader']['global_train_loader']
+                global_test_loader = self.results['global_round_end']['FederatedDatasetLoader']['global_test_loader']
+                self.notify_observers(
+                    ['FederatedAggregator', 'Evaluator', 'Logger'],
+                    f'on_{stage}',
+                    global_train_loader,
+                    global_test_loader,
+                    self.results
+                )
                 
-                if local_train_loader and local_model:
-                    algorithm = [observer for observer in self.observers if isinstance(observer, FedAvgAlgorithm)][0]
-                    trained_local_model = algorithm.local_train(local_model, local_train_loader, client_id)
-                    local_models.append(trained_local_model)
                 
-                self.notify_observers('on_local_round_end', client_id=client_id)
-
-            # Aggregate local models
-            algorithm = [observer for observer in self.observers if isinstance(observer, FedAvgAlgorithm)][0]
-            client_weights = [len(local_train_loader.dataset) for local_train_loader in local_train_loaders]
-            aggregated_model = algorithm.aggregate_models(local_models, client_weights)
             
-            self.notify_observers('on_global_round_end', aggregated_model=aggregated_model)
+            
+   

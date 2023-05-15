@@ -6,10 +6,17 @@ from box import Box
 
 
 
-class BaseFederateDataLoader(ABC):
-    def __init__(self, config:Box, **kwargs):
-        self.config = config
+
+class FederatedDataLoader(ABC):
+    def __init__(self):
         pass
+    
+    @abstractmethod
+    def on_initilization(self, config: Box, **kwargs):
+        self.config = config
+    
+        
+    
     @abstractmethod
     def on_local_round_start(self):
         pass
@@ -25,21 +32,26 @@ class BaseFederateDataLoader(ABC):
     
 
 
-class FederatedDatasetLoader(BaseFederateDataLoader):
-    def __init__(self, config: Box, **kwargs):
-        super().__init__(config, **kwargs)
+class FederatedDatasetLoader(FederatedDataLoader):
+    def __init__(self):
+        super().__init__()
+
+    def on_initilization(self, config: Box, **kwargs):
         self.data_cfg = config.dataset
         self.loader_cfg = config.loader
         self.trainset, self.valset, self.testset = load_dataset(self.data_cfg.name, 
-                                                                config.dataset)
+                                                                config.dataset
+                                                                **kwargs)
         train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(self.trainset, 
                                                                              self.valset, 
                                                                              self.testset, 
-                                                                             data_cfg=self.data_cfg)
+                                                                             data_cfg=self.data_cfg,
+                                                                             **kwargs)
         self.train_idx_mapping = train_idx_mapping
         self.test_idx_mapping = test_idx_mapping
         self.val_idx_mapping = val_idx_mapping
-
+        
+    
     def on_global_round_start(self):
         pass
 
@@ -49,12 +61,13 @@ class FederatedDatasetLoader(BaseFederateDataLoader):
         local_train_loader = DataLoader(local_trainset,
                                         batch_size=self.loader_cfg.batch_size,
                                         shuffle=True)
-        return local_train_loader
+        return {'local_train_loader':local_train_loader}
 
     def on_local_round_end(self, client_id):
         local_test_loader = self.get_client_loader(self.testset, self.test_idx_mapping, client_id)
         local_val_loader = self.get_client_loader(self.valset, self.val_idx_mapping, client_id)
-        return local_test_loader, local_val_loader
+        return {'local_test_loader':local_test_loader or None, 
+                'local_val_loader':local_val_loader or None}
 
     def get_client_loader(self, dataset, index_mapping, client_id):
         if client_id in index_mapping["clients_idx"]:
@@ -68,7 +81,8 @@ class FederatedDatasetLoader(BaseFederateDataLoader):
     def on_global_round_end(self):
         global_test_loader = self.get_global_loader(self.testset, self.test_idx_mapping)
         global_val_loader = self.get_global_loader(self.valset, self.val_idx_mapping)
-        return global_test_loader, global_val_loader
+        return {'global_test_loader':global_test_loader or None,
+                'global_val_loader':global_val_loader or None}
 
     def get_global_loader(self, dataset, index_mapping):
         if index_mapping["global_idx"]:
