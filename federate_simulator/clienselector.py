@@ -68,7 +68,7 @@ if __name__ == '__main__':
     })
     random_selector = RandomClientSelector()
     random_selector.on_initialization(config)
-    result = random_selector.on_global_round_start(1)
+    result = random_selector.on_global_round_start(contexts=None, global_round=1)
     print(f"Selected clients for global round 1: {result['selected_clients']}")
     
     

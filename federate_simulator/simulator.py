@@ -12,15 +12,33 @@ class BaseFederatedLearningSimulator(ABC):
                        'global_round_start',
                        'global_round_end']
         self.contexts = dict.fromkeys(self.stages, {})
-        self.register_observers(observers)
-
-    
+        self.observers_priority = {'ClientSelector': 1, 
+                                   'FederatedDataLoader': 2,
+                                   'FederatedAggregator': 3,
+                                   'CommunicationChannel': 4,
+                                   'Evaluator': 5,
+                                   'Logger': 6}
+        try:
+            self.register_observers(observers)
+        except Exception as e:
+            print(f'Error when registering observers: {e}')
+        
     
     def register_observer(self, observers):
         for observer in observers:
             base_class_name = observer.__class__.__bases__[0].__name__
             self.observers[base_class_name] = observer
-
+        # Sort the observers by their priority
+        # the priority is 1. ClientSelector, 
+        # 2. FederatedDataLoader, 3
+        # . FederatedAggregator, 
+        # 4. Evaluator,
+        # 5. Logger
+        # Sort the dict of observers by the key value following the above order
+        self.observers = dict(sorted(self.observers.items(), 
+                                 key=lambda x: self.observer_priority[x[0]]))
+    
+         
 
         
     def notify_observer(self, observer_name, stage, *args, **kwargs):
@@ -68,7 +86,7 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
             selected_clients = self.contexts['global_round_start']['ClientSelector']['selected_clients']
             for client_id in selected_clients:
                 stage = 'local_round_start'
-                self.notify_observers(['FederatedDataLoader'], 
+                self.notify_observer('FederatedDataLoader', 
                                       f'on_{stage}', client_id)
                 local_train_loader = self.contexts['local_round_start']['FederatedDatasetLoader']['local_train_loader']
                 if local_train_loader:
@@ -87,8 +105,7 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
                     self.notify_observer(['FederatedAggregator',
                                           'Evaluator', 
                                           'Logger'], 
-                                         f'on_{stage}',
-                                         self.contexts, 
+                                         f'on_{stage}', 
                                          local_test_loader, 
                                          local_val_loader, 
                                          client_id)
@@ -97,15 +114,15 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
                 'FederatedDataLoader',
                 f'on_{stage}',
             )
-            global_train_loader = self.contexts['global_round_end']['FederatedDatasetLoader']['global_train_loader']
+            global_val_loader = self.contexts['global_round_end']['FederatedDatasetLoader']['global_val_loader']
             global_test_loader = self.contexts['global_round_end']['FederatedDatasetLoader']['global_test_loader']
             self.notify_observers(
                 ['FederatedAggregator', 'Evaluator', 'Logger'],
                 f'on_{stage}',
-                global_train_loader,
+                global_val_loader,
                 global_test_loader,
-                self.contexts
             )
+            self.flush_contexts()
                 
                 
             

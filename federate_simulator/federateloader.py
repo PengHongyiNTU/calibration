@@ -38,7 +38,7 @@ class FederatedDatasetLoader(FederatedDataLoader):
         self.data_cfg = config.dataset
         self.loader_cfg = config.loader
         self.trainset, self.valset, self.testset = load_dataset(self.data_cfg.name, 
-                                                                config.dataset
+                                                                config.dataset,
                                                                 **kwargs)
         train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(self.trainset, 
                                                                              self.valset, 
@@ -67,14 +67,6 @@ class FederatedDatasetLoader(FederatedDataLoader):
         return {'local_test_loader':local_test_loader or None, 
                 'local_val_loader':local_val_loader or None}
 
-    def get_client_loader(self, contexts, dataset, index_mapping, client_id):
-        if client_id in index_mapping["clients_idx"]:
-            local_subset = Subset(dataset, index_mapping["clients_idx"][client_id])
-            local_loader = DataLoader(local_subset,
-                                      batch_size=self.loader_cfg.test_batch_size,
-                                      shuffle=True)
-            return local_loader
-        return None
 
     def on_global_round_end(self, contexts):
         global_test_loader = self.get_global_loader(self.testset, self.test_idx_mapping)
@@ -89,6 +81,15 @@ class FederatedDatasetLoader(FederatedDataLoader):
                                        batch_size=self.loader_cfg.test_batch_size,
                                        shuffle=True)
             return global_loader
+        return None
+    
+    def get_client_loader(self,  dataset, index_mapping, client_id):
+        if client_id in index_mapping["clients_idx"]:
+            local_subset = Subset(dataset, index_mapping["clients_idx"][client_id])
+            local_loader = DataLoader(local_subset,
+                                      batch_size=self.loader_cfg.test_batch_size,
+                                      shuffle=True)
+            return local_loader
         return None
             
     
@@ -114,12 +115,13 @@ if __name__ == "__main__":
             }        
         }
     )
-    fedloader = FederatedDatasetLoader(cfg)
+    fedloader = FederatedDatasetLoader()
+    fedloader.on_initilization(cfg)
     for client_id in range(cfg.dataset.num_clients):
         print(f"\nClient {client_id}:")
-        local_train_loader = fedloader.on_local_round_start(client_id)
-        local_test_loader, local_val_loader = fedloader.on_local_round_end(
-            client_id)
+        local_train_loader = fedloader.on_local_round_start(None, client_id)['local_train_loader']
+        local_test_loader, local_val_loader = fedloader.on_local_round_end(None,
+            client_id)['local_test_loader'], fedloader.on_local_round_end(None, client_id)['local_val_loader']
         print(f"Local Train Loader: {len(local_train_loader.dataset)} samples")
         if local_test_loader is not None:
             print(
@@ -129,7 +131,7 @@ if __name__ == "__main__":
                 f"Local Validation Loader: {len(local_val_loader.dataset)} samples")
 
     print("\nGlobal Loaders:")
-    global_test_loader, global_val_loader = fedloader.on_global_round_end()
+    global_test_loader, global_val_loader = fedloader.on_global_round_end(None)['global_test_loader'], fedloader.on_global_round_end(None)['global_val_loader']
     if global_test_loader is not None:
         print(f"Global Test Loader: {len(global_test_loader.dataset)} samples")
     if global_val_loader is not None:
