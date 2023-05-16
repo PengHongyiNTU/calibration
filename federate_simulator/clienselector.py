@@ -11,19 +11,19 @@ class ClientSelector(ABC):
         pass
 
     @abstractmethod
-    def on_global_round_start(self):
+    def on_global_round_start(self, contexts, **kwargs):
         pass
 
     @abstractmethod
-    def on_local_round_start(self):
+    def on_local_round_start(self, contexts, **kwargs):
         pass
 
     @abstractmethod
-    def on_local_round_end(self):
+    def on_local_round_end(self, contexts, **kwargs):
         pass
 
     @abstractmethod
-    def on_global_round_end(self):
+    def on_global_round_end(self, contexts, **kwargs):
         pass
 
 
@@ -42,20 +42,20 @@ class RandomClientSelector(ClientSelector):
         else:
             return random.sample(range(num_clients), num_selected_clients)
 
-    def on_global_round_start(self, global_round):
+    def on_global_round_start(self, contexts, global_round):
         selected_clients = self.select_clients(self.num_clients,
                                                self.num_selected_clients)
         return {'selected_clients': selected_clients,
                 'global_round': global_round}
         
         
-    def on_local_round_start(self, **kwargs):
+    def on_local_round_start(self,  contexts, **kwargs):
         pass
     
-    def on_local_round_end(self, **kwargs):
+    def on_local_round_end(self,  contexts, **kwargs):
         pass
     
-    def on_global_round_end(self, **kwargs):
+    def on_global_round_end(self, contexts, **kwargs):
         pass
     
 

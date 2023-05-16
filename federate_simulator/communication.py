@@ -5,16 +5,16 @@ class BaseCommunicationChannel(ABC):
         self.config = config
         pass
     @abstractmethod
-    def on_global_round_start(self):
+    def on_global_round_start(self, contexts, **kwargs):
         pass
     @abstractmethod
-    def on_global_round_end(self):
+    def on_global_round_end(self, contexts, **kwargs):
         pass
     @abstractmethod
-    def on_local_round_start(self):
+    def on_local_round_start(self, contexts, **kwargs):
         pass
     @abstractmethod
-    def on_local_round_end(self):
+    def on_local_round_end(self, contexts, **kwargs):
         pass
     
 

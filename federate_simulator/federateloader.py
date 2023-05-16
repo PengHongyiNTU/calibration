@@ -15,19 +15,17 @@ class FederatedDataLoader(ABC):
     def on_initilization(self, config: Box, **kwargs):
         self.config = config
     
-        
-    
     @abstractmethod
-    def on_local_round_start(self):
+    def on_local_round_start(self, contexts, **kwargs):
         pass
     @abstractmethod
-    def on_local_round_end(self):
+    def on_local_round_end(self, contexts, **kwargs):
         pass
     @abstractmethod
-    def on_global_round_start(self):
+    def on_global_round_start(self, contexts, **kwargs):
         pass
     @abstractmethod
-    def on_global_round_end(self): 
+    def on_global_round_end(self, contexts, **kwargs): 
         pass
     
 
@@ -55,7 +53,7 @@ class FederatedDatasetLoader(FederatedDataLoader):
     def on_global_round_start(self):
         pass
 
-    def on_local_round_start(self, client_id):
+    def on_local_round_start(self, contexts, client_id):
         local_trainset = Subset(self.trainset, 
                                 self.train_idx_mapping['clients_idx'][client_id])
         local_train_loader = DataLoader(local_trainset,
@@ -63,13 +61,13 @@ class FederatedDatasetLoader(FederatedDataLoader):
                                         shuffle=True)
         return {'local_train_loader':local_train_loader}
 
-    def on_local_round_end(self, client_id):
+    def on_local_round_end(self, contexts, client_id):
         local_test_loader = self.get_client_loader(self.testset, self.test_idx_mapping, client_id)
         local_val_loader = self.get_client_loader(self.valset, self.val_idx_mapping, client_id)
         return {'local_test_loader':local_test_loader or None, 
                 'local_val_loader':local_val_loader or None}
 
-    def get_client_loader(self, dataset, index_mapping, client_id):
+    def get_client_loader(self, contexts, dataset, index_mapping, client_id):
         if client_id in index_mapping["clients_idx"]:
             local_subset = Subset(dataset, index_mapping["clients_idx"][client_id])
             local_loader = DataLoader(local_subset,
@@ -78,7 +76,7 @@ class FederatedDatasetLoader(FederatedDataLoader):
             return local_loader
         return None
 
-    def on_global_round_end(self):
+    def on_global_round_end(self, contexts):
         global_test_loader = self.get_global_loader(self.testset, self.test_idx_mapping)
         global_val_loader = self.get_global_loader(self.valset, self.val_idx_mapping)
         return {'global_test_loader':global_test_loader or None,
