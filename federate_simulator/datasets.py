@@ -48,17 +48,21 @@ def split_dataset(trainset: Dataset,
 
 
 def load_centralized_dataset(dataset: str, data_cfg: Box) -> Tuple[Dataset, Dataset, Union[Dataset, None]]:
+    UNIFORM_SIZE = (32, 32)
     if dataset == 'mnist':
         data_class = torchvision.datasets.MNIST
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+            [transforms.Resize(UNIFORM_SIZE),
+             transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         trainset = data_class(root='./data', train=True,
                               download=True, transform=transform)
         testset = data_class(root='./data', train=False,
                              download=True, transform=transform)
     elif dataset == 'cifar10':
         data_class = torchvision.datasets.CIFAR10
-        transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
+        transform = transforms.Compose([
+            transforms.Resize(UNIFORM_SIZE),
+            transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
                                         transforms.ToTensor(), 
                                         transforms.Normalize((0.4914, 0.4822, 0.4465),
                                                             (0.2023, 0.1994, 0.2010))])
@@ -68,7 +72,9 @@ def load_centralized_dataset(dataset: str, data_cfg: Box) -> Tuple[Dataset, Data
                          download=True, transform=transform)
     elif dataset == 'cifar100':
         data_class = torchvision.datasets.CIFAR100
-        transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
+        transform = transforms.Compose([
+            transforms.Resize(UNIFORM_SIZE),
+            transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
                                         transforms.ToTensor(), 
                                         transforms.Normalize((0.5071, 0.4867, 0.4408),
                                                             (0.2675, 0.2565, 0.2761))])
@@ -81,7 +87,8 @@ def load_centralized_dataset(dataset: str, data_cfg: Box) -> Tuple[Dataset, Data
         test_dir = './data/tiny-imagenet-200/val/'
         # val_dir = './data/tiny-imagenet-200/val/'
         transform = transforms.Compose([
-            transforms.RandomCrop(64, padding=4),
+            transforms.Resize(UNIFORM_SIZE),
+            transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
@@ -127,7 +134,7 @@ if __name__ == "__main__":
     }, dafault_box=True)
 
     train_set, test_set, val_set = load_dataset(
-        'tiny-imagenet-200', data_cfg)
+        'mnist', data_cfg)
     train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(
         trainset=train_set, testset=test_set, valset=val_set, data_cfg=data_cfg
     )

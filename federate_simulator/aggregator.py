@@ -1,11 +1,18 @@
 from abc import ABC, abstractmethod
+from box import Box
+from modelfactory import ModelFactory
 
-
-
-class BaseAggregation(ABC):
-    def __init__(self, config):
-        self.config = config
+class FederatedAggregator(ABC):
+    def __init__(self):
         pass
+    
+    @abstractmethod
+    def on_initialization(self, config:Box, **kwargs):
+        self.config = config
+        model_factory = ModelFactory()
+        self.model = model_factory.create_model(config.model.name, config.model)
+        
+        
     @abstractmethod
     def on_global_round_start(self, contexts, **kwargs):
         pass
@@ -20,7 +27,7 @@ class BaseAggregation(ABC):
         pass
     
 
-class FedAvg(BaseAggregation):
+class LocalFedAvg(FederatedAggregator):
     def __init__(self, config):
         super().__init__(config)
         pass
@@ -33,7 +40,7 @@ class FedAvg(BaseAggregation):
     def on_local_round_end(self):
         pass
     
-class FedProx(BaseAggregation):
+class FedProx(FederatedAggregator):
     def __init__(self, config):
         super().__init__(config)
         pass
@@ -46,7 +53,7 @@ class FedProx(BaseAggregation):
     def on_local_round_end(self):
         pass
     
-class Ditto(BaseAggregation):
+class Ditto(FederatedAggregator):
     def __init__(self, config):
         super().__init__(config)
         pass
