@@ -12,7 +12,7 @@ class FederatedDataLoader(ABC):
         pass
     
     @abstractmethod
-    def on_initilization(self, config: Box, **kwargs):
+    def on_initialization(self, config: Box, **kwargs):
         self.config = config
     
     @abstractmethod
@@ -34,15 +34,20 @@ class FederatedDatasetLoader(FederatedDataLoader):
     def __init__(self):
         super().__init__()
 
-    def on_initilization(self, config: Box, **kwargs):
+    def on_initialization(self, config: Box, **kwargs):
         self.data_cfg = config.dataset
         self.loader_cfg = config.loader
         self.trainset, self.valset, self.testset = load_dataset(self.data_cfg.name, 
                                                                 config.dataset,
                                                                 **kwargs)
-        train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(self.trainset, 
+        print(f"Trainset: {len(self.trainset)}")
+        print(f"Valset: {len(self.valset)}")
+        print(f"Testset: {len(self.testset)}")
+
+        
+        train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(self.trainset,                                                          
+                                                                             self.testset,
                                                                              self.valset, 
-                                                                             self.testset, 
                                                                              data_cfg=self.data_cfg,
                                                                              **kwargs)
         self.train_idx_mapping = train_idx_mapping
@@ -50,7 +55,7 @@ class FederatedDatasetLoader(FederatedDataLoader):
         self.val_idx_mapping = val_idx_mapping
         
     
-    def on_global_round_start(self):
+    def on_global_round_start(self, contexts):
         pass
 
     def on_local_round_start(self, contexts, client_id):
@@ -116,7 +121,7 @@ if __name__ == "__main__":
         }
     )
     fedloader = FederatedDatasetLoader()
-    fedloader.on_initilization(cfg)
+    fedloader.on_initialization(cfg)
     for client_id in range(cfg.dataset.num_clients):
         print(f"\nClient {client_id}:")
         local_train_loader = fedloader.on_local_round_start(None, client_id)['local_train_loader']

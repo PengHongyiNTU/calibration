@@ -6,12 +6,13 @@ class BaseFederatedLearningSimulator(ABC):
     def __init__(self, config: Box, observers):
         self.config = config
         self.observers = {}
-        self.stages = ['initilization',
+        self.stages = ['initialization',
                         'local_round_start',
                        'local_round_end',
                        'global_round_start',
                        'global_round_end']
-        self.contexts = dict.fromkeys(self.stages, {})
+        self.contexts = Box(dict.fromkeys(self.stages, {}), 
+                            default_box=True)
         self.observers_priority = {'ClientSelector': 1, 
                                    'FederatedDataLoader': 2,
                                    'FederatedAggregator': 3,
@@ -30,8 +31,8 @@ class BaseFederatedLearningSimulator(ABC):
             self.observers[base_class_name] = observer
         # Sort the observers by their priority
         # the priority is 1. ClientSelector, 
-        # 2. FederatedDataLoader, 3
-        # . FederatedAggregator, 
+        # 2. FederatedDataLoader, 
+        # 3. FederatedAggregator, 
         # 4. Evaluator,
         # 5. Logger
         # Sort the dict of observers by the key value following the above order
@@ -78,17 +79,17 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
 
     def run(self):
         # Initialize all observers
-        stage = 'initilization'
+        stage = 'initialization'
         self.notify_all(f'on_{stage}', self.config)
         for global_round in self.config.global_rounds:
             stage = 'global_round_start'
             self.notify_observer('ClientSelector', f'on_{stage}', global_round)
-            selected_clients = self.contexts['global_round_start']['ClientSelector']['selected_clients']
+            selected_clients = self.contexts.global_round_start.ClientSelector.selected_clients
             for client_id in selected_clients:
                 stage = 'local_round_start'
                 self.notify_observer('FederatedDataLoader', 
                                       f'on_{stage}', client_id)
-                local_train_loader = self.contexts['local_round_start']['FederatedDatasetLoader']['local_train_loader']
+                local_train_loader = self.contexts.local_round_start.FederatedDatasetLoader.local_train_loader
                 if local_train_loader:
                     self.notify_observers(
                         ['FederatedAggregator', 
@@ -99,8 +100,8 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
                     )
                 stage = 'local_round_end'
                 self.notify_observer('FederatedDataLoader', f'on_{stage}', client_id)
-                local_test_loader = self.contexts['local_round_end']['FederatedDatasetLoader']['local_test_loader']
-                local_val_loader = self.contexts['local_round_end']['FederatedDatasetLoader']['local_val_loader']
+                local_test_loader = self.contexts.local_round_end.FederatedDatasetLoader.local_test_loader
+                local_val_loader = self.contexts.local_round_end.FederatedDatasetLoader.local_val_loader
                 if local_test_loader or local_val_loader:
                     self.notify_observer(['FederatedAggregator',
                                           'Evaluator', 
@@ -114,15 +115,14 @@ class FederatedLearningSimulator(BaseFederatedLearningSimulator):
                 'FederatedDataLoader',
                 f'on_{stage}',
             )
-            global_val_loader = self.contexts['global_round_end']['FederatedDatasetLoader']['global_val_loader']
-            global_test_loader = self.contexts['global_round_end']['FederatedDatasetLoader']['global_test_loader']
+            global_val_loader = self.contexts.global_round_end.FederatedDatasetLoader.global_val_loader
+            global_test_loader = self.contexts.global_round_end.FederatedDatasetLoader.global_test_loader
             self.notify_observers(
                 ['FederatedAggregator', 'Evaluator', 'Logger'],
                 f'on_{stage}',
                 global_val_loader,
                 global_test_loader,
             )
-            self.flush_contexts()
                 
                 
             

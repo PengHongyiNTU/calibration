@@ -2,6 +2,7 @@ import torch
 from torchvision import models
 from torch import nn
 from box import Box
+import torch.nn.functional as F
 
 
 class MLP(nn.Module):
@@ -22,7 +23,8 @@ class MLP(nn.Module):
         return x 
 
 class CNN(nn.Module):
-    def __init__(self, num_channels=3, hidden_sizes=[32, 64, 128], num_classes=10):
+    def __init__(self, num_channels=3, hidden_sizes=[32, 64, 128], 
+                 num_classes=10, input_size=(32, 32)):
         super().__init__()
         self.layers = nn.ModuleList()
         self.layers.append(nn.Conv2d(num_channels, hidden_sizes[0], kernel_size=3, stride=1, padding=1))
@@ -32,14 +34,18 @@ class CNN(nn.Module):
             self.layers.append(nn.Conv2d(hidden_sizes[i], hidden_sizes[i+1], kernel_size=3, stride=1, padding=1))
         self.layers.append(nn.ReLU())  # Corrected 'lauyers' to 'layers'
         self.layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-        self.fc = nn.Linear(hidden_sizes[-1], num_classes)
+        self.fc1 = nn.Linear(2048, 256)
+        self.fc2 = nn.Linear(256, num_classes)
         
     def forward(self, x):
         for layer in self.layers:
             x = layer(x)
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.fc2(x)
         return x
+
 
 
 def convert_bn_to_gn(module, num_groups):
@@ -64,7 +70,7 @@ class ModelFactory:
     
     def create_model(self, config:Box):
         dataset = config.dataset.name
-        model_type = config.model.model_type
+        model_type = config.model
         if dataset not in self.supported.keys():
             raise ValueError(f'Unknown dataset {dataset}')
         elif model_type not in self.supported[dataset]:
@@ -109,7 +115,7 @@ class ModelFactory:
 if __name__ == "__main__":
     config_mnist = Box({
         'dataset': {'name': 'mnist'},
-        'model': {'model_type': 'MLP'}
+        'model': 'MLP'
     })
     factory = ModelFactory()
     model_mnist = factory.create_model(config_mnist)

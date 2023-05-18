@@ -100,18 +100,15 @@ def load_centralized_dataset(dataset: str, data_cfg: Box) -> Tuple[Dataset, Data
             test_dir, transform=transform)
         # valset = torchvision.datasets.ImageFolder(val_dir, transform=transform)
     if data_cfg.val:
-        if not valset:
-            if data_cfg.val_portion is None:
+        if data_cfg.val_portion is None:
                 raise ValueError('val_portion must be set when val is True')
-            elif data_cfg.val_portion < 0 or data_cfg.val_portion > 1:
+        elif data_cfg.val_portion < 0 or data_cfg.val_portion > 1:
                 raise ValueError('val_portion must be in [0, 1]')
-            else:
+        else:
                 val_size = int(len(trainset) * data_cfg.val_portion)
                 trainset, valset = random_split(
                     trainset, [len(trainset) - val_size, val_size])
-            return trainset, testset, valset
-        else:
-            return trainset, testset, valset
+        return trainset, testset, valset
     else:
         return trainset, testset, None
 
@@ -134,7 +131,7 @@ if __name__ == "__main__":
     }, dafault_box=True)
 
     train_set, test_set, val_set = load_dataset(
-        'mnist', data_cfg)
+        'tiny-imagenet', data_cfg)
     train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(
         trainset=train_set, testset=test_set, valset=val_set, data_cfg=data_cfg
     )
