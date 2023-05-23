@@ -2,9 +2,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import TypedDict, Union, List
 from torch.utils.data import random_split
-# A seperate data class that aims to store the data index of each client
-# It can be accessed as a python Box object
-# For example: ClientDataIdxMap.client_id = [0, 1, 2, 3, 4, 5, 6]
+from noise import uniform_mix_C, flip_labels_C, flip_labels_C_two
 
 
 class DataMap(TypedDict):
@@ -13,14 +11,14 @@ class DataMap(TypedDict):
 
 
 class BaseSplitter(ABC):
-    def __init__(self, num_clients, dataset):
+    def __init__(self, num_clients):
         self.num_clients = num_clients
-        self.dataset = dataset
         pass
 
     @abstractmethod
     def split(self, dataset):
         pass
+  
 
 
 def dirichlet_distribution_non_iid_slice(label, num_clients, alpha, min_size=10):
@@ -72,7 +70,10 @@ class LDASplitter(BaseSplitter):
         self.min_size = min_size
         # if training, no global data map
 
-    def split(self, dataset, train=True, local=True, global_local_ratio=0.5):
+    def split(self, dataset, 
+              train=True, 
+              local=True, 
+              global_local_ratio=0.5):
         data_map: DataMap = {
             'global_idx': None,
             'clients_idx': dict.fromkeys(range(self.num_clients), None)
@@ -116,7 +117,10 @@ class IIDSplitter(BaseSplitter):
     def __init__(self, num_clients):
         self.num_clients = num_clients
     
-    def split(self, dataset, train=True, local=True, global_local_ratio=0.5):
+    def split(self, dataset, 
+              train=True, 
+              local=True, 
+              global_local_ratio=0.5):
         data_map: DataMap = {
             'global_idx': None,
             'clients_idx': dict.fromkeys(range(self.num_clients), None)
@@ -149,6 +153,8 @@ class IIDSplitter(BaseSplitter):
 
     def __repr__(self):
         return f'{self.__class__.__name__}(num_clients={self.num_clients})'
+    
+
 
 if __name__ == "__main__":
     pass

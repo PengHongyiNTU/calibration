@@ -5,10 +5,52 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import random_split
 from split import LDASplitter, IIDSplitter
+from noise import uniform_mix_C, flip_labels_C_two, flip_labels_C
+import torch
+import numpy as np
+
+
+
+def insert_noise(dataset:Dataset, 
+                 noise_ratio, 
+                 noise_type='uniform',
+                 random_seed = 3407,
+                 retain_filpped_idx=False):
+    # From a dataset infer the number of classes
+    assert noise_type in ['uniform', 'flip_two', 'flip_one'], f'Unknown noise type {noise_type}'
+    assert noise_ratio >= 0 and noise_ratio <= 1, f'Noise ratio must be between 0 and 1, got {noise_ratio}'
+    n_classes = len(dataset.classes)
+    if noise_type == 'uniform':
+        noise_matrix = uniform_mix_C(noise_ratio, num_classes=n_classes,
+                                     seed=random_seed)
+    elif noise_type == 'flip_two':
+        noise_matrix = flip_labels_C_two(noise_ratio, num_classes=n_classes,
+                                         seed=random_seed)
+    elif noise_type == 'flip_one':
+        noise_matrix = flip_labels_C(noise_ratio, num_classes=n_classes,
+                                     seed=random_seed)
+    # Fixed the random seed for reproducibility
+    np.random.seed(random_seed)
+    is_flipped = np.zeros(len(dataset))
+    for i in range(len(dataset)):
+        y_corrupted = np.random.choice(
+            np.arange(0, n_classes), p=noise_matrix[dataset.targets[i]])
+        if retain_filpped_idx:
+            if y_corrupted != dataset.targets[i]:
+                is_flipped[i] = 1
+            else:
+                is_flipped[i] = 0
+        dataset.targets[i] = y_corrupted
+    return dataset, is_flipped
+    
+                
+        
+    
+
 
 
 def load_dataset(dataset: str, data_cfg: Box):
-    if dataset in ['mnist', 'cifar10', 'cifar100']:
+    if dataset in ['mnist', 'cifar10', 'cifar100', 'tiny-imagenet-200']:
         trainset, testset, valset = load_centralized_dataset(dataset, data_cfg)
     elif dataset in ['some_real_fl_dataset']:
         trainset, testset, valset = load_federated_dataset(dataset, data_cfg)
@@ -36,52 +78,78 @@ def split_dataset(trainset: Dataset,
             splitter = IIDSplitter(num_clients, **kwargs)
         train_mapping = splitter.split(trainset, train=True)
         test_mapping = splitter.split(testset, train=False,
-                                          local=data_cfg.require_local_test,
-                                          global_local_ratio=data_cfg.global_local_ratio)
+                                      local=data_cfg.require_local_test,
+                                      global_local_ratio=data_cfg.global_local_ratio)
         if valset is not None:
             val_mapping = splitter.split(valset, train=False,
-                                            local=data_cfg.require_local_val,
-                                            global_local_ratio=data_cfg.global_local_ratio)
+                                         local=data_cfg.require_local_val,
+                                         global_local_ratio=data_cfg.global_local_ratio)
         else:
             val_mapping = None
     return train_mapping, test_mapping, val_mapping
 
 
 def load_centralized_dataset(dataset: str, data_cfg: Box) -> Tuple[Dataset, Dataset, Union[Dataset, None]]:
+    UNIFORM_SIZE = (32, 32)
     if dataset == 'mnist':
         data_class = torchvision.datasets.MNIST
         transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+            [transforms.Resize(UNIFORM_SIZE),
+             transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+        trainset = data_class(root='./data', train=True,
+                              download=True, transform=transform)
+        testset = data_class(root='./data', train=False,
+                             download=True, transform=transform)
     elif dataset == 'cifar10':
         data_class = torchvision.datasets.CIFAR10
-        transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
-                                        transforms.ToTensor(), transforms.Normalize((0.4914, 0.4822, 0.4465),
-                                                                                    (0.2023, 0.1994, 0.2010))])
+        transform = transforms.Compose([
+            transforms.Resize(UNIFORM_SIZE),
+            transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
+                                        transforms.ToTensor(), 
+                                        transforms.Normalize((0.4914, 0.4822, 0.4465),
+                                                            (0.2023, 0.1994, 0.2010))])
+        trainset = data_class(root='./data', train=True,
+                          download=True, transform=transform)
+        testset = data_class(root='./data', train=False,
+                         download=True, transform=transform)
     elif dataset == 'cifar100':
         data_class = torchvision.datasets.CIFAR100
-        transform = transforms.Compose([transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
-                                        transforms.ToTensor(), transforms.Normalize((0.5071, 0.4867, 0.4408),
-    
-    # To be include in the future
-    # TINY IMAGENET
-    # FEMNIST
-    # SVHN
-    # SHAKESPEARE
-
-                                                                                    (0.2675, 0.2565, 0.2761))])
-    trainset = data_class(root='./data', train=True,
+        transform = transforms.Compose([
+            transforms.Resize(UNIFORM_SIZE),
+            transforms.RandomHorizontalFlip(), transforms.RandomCrop(32, 4),
+                                        transforms.ToTensor(), 
+                                        transforms.Normalize((0.5071, 0.4867, 0.4408),
+                                                            (0.2675, 0.2565, 0.2761))])
+        trainset = data_class(root='./data', train=True,
                           download=True, transform=transform)
-    testset = data_class(root='./data', train=False,
+        testset = data_class(root='./data', train=False,
                          download=True, transform=transform)
+    elif dataset == 'tiny-imagenet-200':
+        train_dir = './data/tiny-imagenet-200/train/'
+        test_dir = './data/tiny-imagenet-200/val/'
+        # val_dir = './data/tiny-imagenet-200/val/'
+        transform = transforms.Compose([
+            transforms.Resize(UNIFORM_SIZE),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
+                                 0.229, 0.224, 0.225])  # Normalize using ImageNet norms
+        ])
+        trainset = torchvision.datasets.ImageFolder(
+            train_dir, transform=transform)
+        testset = torchvision.datasets.ImageFolder(
+            test_dir, transform=transform)
+        # valset = torchvision.datasets.ImageFolder(val_dir, transform=transform)
     if data_cfg.val:
         if data_cfg.val_portion is None:
-            raise ValueError('val_portion must be set when val is True')
+                raise ValueError('val_portion must be set when val is True')
         elif data_cfg.val_portion < 0 or data_cfg.val_portion > 1:
-            raise ValueError('val_portion must be in [0, 1]')
+                raise ValueError('val_portion must be in [0, 1]')
         else:
-            val_size = int(len(trainset) * data_cfg.val_portion)
-            trainset, valset = random_split(
-                trainset, [len(trainset) - val_size, val_size])
+                val_size = int(len(trainset) * data_cfg.val_portion)
+                trainset, valset = random_split(
+                    trainset, [len(trainset) - val_size, val_size])
         return trainset, testset, valset
     else:
         return trainset, testset, None
@@ -105,7 +173,7 @@ if __name__ == "__main__":
     }, dafault_box=True)
 
     train_set, test_set, val_set = load_dataset(
-        'mnist', data_cfg)
+        'tiny-imagenet', data_cfg)
     train_idx_mapping, test_idx_mapping, val_idx_mapping = split_dataset(
         trainset=train_set, testset=test_set, valset=val_set, data_cfg=data_cfg
     )
