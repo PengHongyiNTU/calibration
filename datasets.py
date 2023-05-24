@@ -5,51 +5,10 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import random_split
 from split import LDASplitter, IIDSplitter
-from noise import uniform_mix_C, flip_labels_C_two, flip_labels_C
-import torch
-import numpy as np
 
 
-
-def insert_noise(dataset:Dataset, 
-                 noise_ratio, 
-                 noise_type='uniform',
-                 random_seed = 3407,
-                 retain_filpped_idx=False):
-    # From a dataset infer the number of classes
-    assert noise_type in ['uniform', 'flip_two', 'flip_one'], f'Unknown noise type {noise_type}'
-    assert noise_ratio >= 0 and noise_ratio <= 1, f'Noise ratio must be between 0 and 1, got {noise_ratio}'
-    n_classes = len(dataset.classes)
-    if noise_type == 'uniform':
-        noise_matrix = uniform_mix_C(noise_ratio, num_classes=n_classes,
-                                     seed=random_seed)
-    elif noise_type == 'flip_two':
-        noise_matrix = flip_labels_C_two(noise_ratio, num_classes=n_classes,
-                                         seed=random_seed)
-    elif noise_type == 'flip_one':
-        noise_matrix = flip_labels_C(noise_ratio, num_classes=n_classes,
-                                     seed=random_seed)
-    # Fixed the random seed for reproducibility
-    np.random.seed(random_seed)
-    is_flipped = np.zeros(len(dataset))
-    for i in range(len(dataset)):
-        y_corrupted = np.random.choice(
-            np.arange(0, n_classes), p=noise_matrix[dataset.targets[i]])
-        if retain_filpped_idx:
-            if y_corrupted != dataset.targets[i]:
-                is_flipped[i] = 1
-            else:
-                is_flipped[i] = 0
-        dataset.targets[i] = y_corrupted
-    return dataset, is_flipped
-    
-                
-        
-    
-
-
-
-def load_dataset(dataset: str, data_cfg: Box):
+def load_dataset(data_cfg: Box):
+    dataset = data_cfg.name
     if dataset in ['mnist', 'cifar10', 'cifar100', 'tiny-imagenet-200']:
         trainset, testset, valset = load_centralized_dataset(dataset, data_cfg)
     elif dataset in ['some_real_fl_dataset']:
